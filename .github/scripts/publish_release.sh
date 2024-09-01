@@ -10,7 +10,7 @@ set -o pipefail # prevents errors in a pipeline from being masked
 
 RELEASE_ID=$1
 
-REPOSITORY=${REPOSITORY:-kyma-project/warden}
+REPOSITORY=${REPOSITORY:-MichalKalke/warden}
 GITHUB_URL=https://api.github.com/repos/${REPOSITORY}
 GITHUB_AUTH_HEADER="Authorization: Bearer ${GITHUB_TOKEN}"
 
@@ -20,4 +20,4 @@ CURL_RESPONSE=$(curl -L \
   -H "${GITHUB_AUTH_HEADER}" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   ${GITHUB_URL}/releases/${RELEASE_ID} \
-  -d '{"draft":false}')
+  -d '{"draft": false, "make_latest": '"$IS_LATEST_RELEASE"'}')

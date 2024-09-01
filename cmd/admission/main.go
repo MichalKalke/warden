@@ -10,6 +10,10 @@ import (
 	"github.com/kyma-project/warden/internal/logging"
 	"github.com/kyma-project/warden/internal/webhook"
 	"go.uber.org/zap/zapcore"
+	"k8s.io/apimachinery/pkg/fields"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
 	"github.com/go-logr/zapr"
 	"github.com/kyma-project/warden/internal/admission"
@@ -21,9 +25,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
+	ctrladmission "sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 var (
@@ -105,18 +110,34 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), manager.Options{
-		Scheme:             scheme,
-		Port:               appConfig.Admission.Port,
-		MetricsBindAddress: ":9090",
-		Logger:             logrZap,
-		ClientDisableCacheFor: []ctrlclient.Object{
-			&corev1.Secret{},
-			&corev1.ConfigMap{},
+		Scheme: scheme,
+		Metrics: ctrlmetrics.Options{
+			BindAddress: ":9090",
+		},
+		Logger:                 logrZap,
+		HealthProbeBindAddress: ":8090",
+		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+			CertName: certs.CertFile,
+			KeyName:  certs.KeyFile,
+			Port:     appConfig.Admission.Port,
+		}),
+		Cache: cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&corev1.Secret{}: {
+					Field: fields.SelectorFromSet(fields.Set{"metadata.name": appConfig.Admission.SecretName,
+						"metadata.namespace": appConfig.Admission.SystemNamespace}),
+				},
+			},
 		},
 	})
 	if err != nil {
 		logger.Error("failed to start manager", err.Error())
 		os.Exit(2)
+	}
+
+	if err := mgr.AddReadyzCheck("readiness check", healthz.Ping); err != nil {
+		logger.Error(err, "unable to register readyz")
+		os.Exit(1)
 	}
 
 	if err := webhook.SetupResourcesController(context.TODO(), mgr,
@@ -126,7 +147,6 @@ func main() {
 		deployName,
 		addOwnerRef,
 		logger); err != nil {
-
 		logger.Error("failed to setup webhook resource controller ", err.Error())
 		os.Exit(5)
 	}
@@ -144,15 +164,13 @@ func main() {
 	logger.Info("setting up webhook server")
 	// webhook server setup
 	whs := mgr.GetWebhookServer()
-	whs.CertName = certs.CertFile
-	whs.KeyName = certs.KeyFile
-
+	decoder := ctrladmission.NewDecoder(mgr.GetScheme())
 	whs.Register(admission.ValidationPath, &ctrlwebhook.Admission{
-		Handler: admission.NewValidationWebhook(logger.With("webhook", "validation")),
+		Handler: admission.NewValidationWebhook(logger.With("webhook", "validation"), decoder),
 	})
 
 	whs.Register(admission.DefaultingPath, &ctrlwebhook.Admission{
-		Handler: admission.NewDefaultingWebhook(mgr.GetClient(), validatorSvc, appConfig.Admission.Timeout, appConfig.Admission.StrictMode, logger.With("webhook", "defaulting")),
+		Handler: admission.NewDefaultingWebhook(mgr.GetClient(), validatorSvc, appConfig.Admission.Timeout, appConfig.Admission.StrictMode, decoder, logger.With("webhook", "defaulting")),
 	})
 
 	logger.Info("starting the controller-manager")

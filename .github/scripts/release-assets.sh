@@ -33,8 +33,8 @@ uploadFile() {
 echo "Fetching releases"
 CURL_RESPONSE=$(curl -w "%{http_code}" -sL \
                 -H "Accept: application/vnd.github+json" \
-                -H "Authorization: Bearer $GITHUB_TOKEN"\
-                https://api.github.com/repos/kyma-project/warden/releases)
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                https://api.github.com/repos/MichalKalke/warden/releases)
 JSON_RESPONSE=$(sed '$ d' <<< "${CURL_RESPONSE}")
 HTTP_CODE=$(tail -n1 <<< "${CURL_RESPONSE}")
 if [[ "${HTTP_CODE}" != "200" ]]; then
@@ -53,7 +53,7 @@ then
 fi
 
 echo "Updating github release with assets"
-UPLOAD_URL="https://uploads.github.com/repos/kyma-project/warden/releases/${RELEASE_ID}/assets"
+UPLOAD_URL="https://uploads.github.com/repos/MichalKalke/warden/releases/${RELEASE_ID}/assets"
 
 
 
