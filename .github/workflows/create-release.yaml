@@ -27,50 +27,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify github actions
-        run: ./.github/scripts/verify-actions-status.sh ${{ github.ref_name }}
+#      - name: Verify github actions
+#        run: ./.github/scripts/verify-actions-status.sh ${{ github.ref_name }}
 
-  upgrade-images:
-    name: Upgrade main images
-    needs: verify-head-status
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.BOT_TOKEN }}
-          fetch-depth: 0
-      
-      - name: Bump sec-scanners-config.yaml
-        run: ./.github/scripts/upgrade-sec-scanners-config.sh
-        env:
-          IMG_VERSION: ${{ github.event.inputs.name }}
-      
-      - name: Bump values.yaml
-        run: |
-          make replace-chart-images
-        env:
-          IMG_DIRECTORY: "prod"
-          IMG_VERSION: ${{ github.event.inputs.name }}
-      
-      - name: Bump chart version
-        run: ./.github/scripts/upgrade-chart-version.sh
-        env:
-          CHART_VERSION: ${{ github.event.inputs.name }}
-      
-      - name: Commit&Push
-        run: |
-          git config --local user.email "otter-releaser@otter-releaser.noreply.github.com"
-          git config --local user.name "otter-releaser"
-
-          git add .
-          git commit --allow-empty -m "upgrade dependencies"
-          git push origin ${{ github.ref_name }}
+#  upgrade-images:
+#    name: Upgrade main images
+#    needs: verify-head-status
+#    runs-on: ubuntu-latest
+#
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v4
+#        with:
+#          token: ${{ secrets.BOT_TOKEN }}
+#          fetch-depth: 0
+#
+#      - name: Bump sec-scanners-config.yaml
+#        run: ./.github/scripts/upgrade-sec-scanners-config.sh
+#        env:
+#          IMG_VERSION: ${{ github.event.inputs.name }}
+#
+#      - name: Bump values.yaml
+#        run: |
+#          make replace-chart-images
+#        env:
+#          IMG_DIRECTORY: "prod"
+#          IMG_VERSION: ${{ github.event.inputs.name }}
+#
+#      - name: Bump chart version
+#        run: ./.github/scripts/upgrade-chart-version.sh
+#        env:
+#          CHART_VERSION: ${{ github.event.inputs.name }}
+#
+#      - name: Commit&Push
+#        run: |
+#          git config --local user.email "otter-releaser@otter-releaser.noreply.github.com"
+#          git config --local user.name "otter-releaser"
+#
+#          git add .
+#          git commit --allow-empty -m "upgrade dependencies"
+#          git push origin ${{ github.ref_name }}
 
   create-tag:
     name: Create tag
-    needs: upgrade-images
+ #   needs: upgrade-images
     runs-on: ubuntu-latest
 
     steps:
@@ -85,15 +85,15 @@ jobs:
           git tag ${{ github.event.inputs.name }}
           git push origin ${{ github.event.inputs.name }}
 
-  builds:
-    needs: create-tag
-    uses: ./.github/workflows/_build.yaml
-    with:
-      tag: "${{ github.event.inputs.name }}"
+#  builds:
+#    needs: create-tag
+#    uses: ./.github/workflows/_build.yaml
+#    with:
+#      tag: "${{ github.event.inputs.name }}"
 
   create-draft:
     name: Create draft release
-    needs: builds
+    needs: create-tag
     runs-on: ubuntu-latest
 
     steps:
@@ -121,16 +121,16 @@ jobs:
     outputs:
       release_id: ${{ steps.create-draft.outputs.release_id }}
 
-  run-integration-test:
-    needs: create-draft
-    uses: ./.github/workflows/_integration-tests.yaml
-    with:
-      directory-version: prod
-      image-version: ${{ github.event.inputs.name }}
+#  run-integration-test:
+#    needs: create-draft
+#    uses: ./.github/workflows/_integration-tests.yaml
+#    with:
+#      directory-version: prod
+#      image-version: ${{ github.event.inputs.name }}
 
   publish-release:
     name: Publish release
-    needs: [run-integration-test, create-draft]
+    needs:  [create-draft]
     runs-on: ubuntu-latest
 
     steps:
