@@ -88,6 +88,8 @@ jobs:
   builds:
     needs: create-tag
     uses: ./.github/workflows/_build.yaml
+    with:
+      tag: "${{ github.event.inputs.name }}"
 
   create-draft:
     name: Create draft release
