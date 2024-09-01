@@ -9,6 +9,7 @@ set -E          # needs to be set if we want the ERR trap
 set -o pipefail # prevents errors in a pipeline from being masked
 
 RELEASE_ID=$1
+IS_LATEST_RELEASE=$2
 
 REPOSITORY=${REPOSITORY:-MichalKalke/warden}
 GITHUB_URL=https://api.github.com/repos/${REPOSITORY}
