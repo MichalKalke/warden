@@ -19,28 +19,33 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+
 	"github.com/go-logr/zapr"
 	"github.com/kyma-project/warden/internal/logging"
-	"os"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kyma-project/warden/internal/config"
 	"github.com/kyma-project/warden/internal/controllers"
 	"github.com/kyma-project/warden/internal/controllers/namespace"
 	"github.com/kyma-project/warden/internal/validate"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	zapk8s "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -92,28 +97,23 @@ func main() {
 	ctrl.SetLogger(logrZap)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     appConfig.Operator.MetricsBindAddress,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: ctrlmetrics.Options{
+			BindAddress: appConfig.Operator.MetricsBindAddress,
+		},
+		WebhookServer: ctrlwebhook.NewServer(ctrlwebhook.Options{
+			Port: 9443,
+		}),
 		HealthProbeBindAddress: appConfig.Operator.HealthProbeBindAddress,
 		LeaderElection:         appConfig.Operator.LeaderElect,
 		LeaderElectionID:       "c3790980.warden.kyma-project.io",
 		Logger:                 logrZap,
-		ClientDisableCacheFor: []ctrlclient.Object{
-			&corev1.Secret{},
-			&corev1.ConfigMap{},
+		Cache: cache.Options{
+			ByObject: map[ctrlclient.Object]cache.ByObject{
+				&corev1.Secret{}:    {},
+				&corev1.ConfigMap{}: {},
+			},
 		},
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
 	})
 	if err != nil {
 		logger.Error(err, "unable to start manager")
@@ -132,6 +132,7 @@ func main() {
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		podValidator,
+		validate.NewValidatorSvcFactory(),
 		controllers.PodReconcilerConfig{RequeueAfter: appConfig.Operator.PodReconcilerRequeueAfter},
 		logger.Named("pod-controller"),
 	)).SetupWithManager(mgr); err != nil {

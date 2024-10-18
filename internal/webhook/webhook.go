@@ -4,15 +4,17 @@ import (
 	"context"
 	"reflect"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/kyma-project/warden/internal/admission"
 
+	"github.com/kyma-project/warden/pkg"
 	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
 	ctlrclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -25,7 +27,8 @@ const (
 	DefaultingWebhookName = "defaulting.webhook.warden.kyma-project.io"
 	ValidationWebhookName = "validation.webhook.warden.kyma-project.io"
 
-	WebhookTimeout = 15
+	ValidationWebhookTimeout = 1
+	MutationWebhookTimeout   = 10
 
 	PodValidationPath = "/validation/pods"
 )
@@ -99,8 +102,8 @@ func getFunctionMutatingWebhookCfg(config WebhookConfig) admissionregistrationv1
 			Service: &admissionregistrationv1.ServiceReference{
 				Namespace: config.ServiceNamespace,
 				Name:      config.ServiceName,
-				Path:      pointer.String(admission.DefaultingPath),
-				Port:      pointer.Int32(443),
+				Path:      ptr.To[string](admission.DefaultingPath),
+				Port:      ptr.To[int32](443),
 			},
 		},
 		FailurePolicy:      &failurePolicy,
@@ -123,7 +126,21 @@ func getFunctionMutatingWebhookCfg(config WebhookConfig) admissionregistrationv1
 			},
 		},
 		SideEffects:    &sideEffects,
-		TimeoutSeconds: pointer.Int32(WebhookTimeout),
+		TimeoutSeconds: ptr.To[int32](MutationWebhookTimeout),
+		NamespaceSelector: &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				// match system and user values in pkg.NamespaceValidationLabel
+				{
+					Key:      pkg.NamespaceValidationLabel,
+					Operator: metav1.LabelSelectorOpIn,
+					Values: []string{
+						pkg.NamespaceValidationEnabled,
+						pkg.NamespaceValidationSystem,
+						pkg.NamespaceValidationUser,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -149,8 +166,8 @@ func createValidatingWebhookConfiguration(config WebhookConfig) *admissionregist
 					Service: &admissionregistrationv1.ServiceReference{
 						Namespace: config.ServiceNamespace,
 						Name:      config.ServiceName,
-						Path:      pointer.String(PodValidationPath),
-						Port:      pointer.Int32(443),
+						Path:      ptr.To[string](PodValidationPath),
+						Port:      ptr.To[int32](443),
 					},
 				},
 				FailurePolicy: &failurePolicy,
@@ -172,7 +189,21 @@ func createValidatingWebhookConfiguration(config WebhookConfig) *admissionregist
 				},
 
 				SideEffects:    &sideEffects,
-				TimeoutSeconds: pointer.Int32(WebhookTimeout),
+				TimeoutSeconds: ptr.To[int32](ValidationWebhookTimeout),
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						// match system and user values in pkg.NamespaceValidationLabel
+						{
+							Key:      pkg.NamespaceValidationLabel,
+							Operator: metav1.LabelSelectorOpIn,
+							Values: []string{
+								pkg.NamespaceValidationEnabled,
+								pkg.NamespaceValidationSystem,
+								pkg.NamespaceValidationUser,
+							},
+						},
+					},
+				},
 			},
 		},
 	}

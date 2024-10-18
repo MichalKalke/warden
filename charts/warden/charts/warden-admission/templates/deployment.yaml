@@ -5,8 +5,13 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     app: {{ .Values.global.name }}
-    app.kubernetes.io/part-of: {{ .Values.global.name }}
+    kyma-project.io/module: {{ .Values.global.name }}
+    app.kubernetes.io/name: {{ .Values.global.name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}-deployment
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
     app.kubernetes.io/component: {{ .Chart.Name }}
+    app.kubernetes.io/part-of: {{ .Values.global.name }}
+    app.kubernetes.io/managed-by: Helm
 spec:
   selector:
     matchLabels:
@@ -17,8 +22,13 @@ spec:
     metadata:
       labels:
         app: {{ .Values.global.name }}
-        app.kubernetes.io/part-of: {{ .Values.global.name }}
+        kyma-project.io/module: {{ .Values.global.name }}
+        app.kubernetes.io/name: {{ .Values.global.name }}
+        app.kubernetes.io/instance: {{ .Values.global.name }}-{{ .Chart.Name }}
+        app.kubernetes.io/version: {{ .Chart.AppVersion }}
         app.kubernetes.io/component: {{ .Chart.Name }}
+        app.kubernetes.io/part-of: {{ .Values.global.name }}
+        app.kubernetes.io/managed-by: Helm
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
@@ -29,6 +39,10 @@ spec:
             {{- toYaml .Values.global.securityContext | nindent 12 }}
           imagePullPolicy: IfNotPresent
           image: "{{ .Values.global.admission.image }}"
+          readinessProbe:
+            httpGet:
+              port: 8090
+              path: /readyz/
           resources:
             {{- toYaml .Values.global.admission.resources | nindent 12 }}
           args:
@@ -45,6 +59,9 @@ spec:
               containerPort: 9090
             - name: http-profiling
               containerPort: 8008
+            - name: health
+              containerPort: 8090
+              protocol: TCP
           volumeMounts:
             - name: config
               mountPath: {{ .Values.global.config.dir }}
@@ -57,7 +74,7 @@ spec:
           configMap:
             name: {{ .Values.global.config.configmapName }}
         - name: tmp-cert
-          emptyDir: {}
+          emptyDir: { }
         - name: notary-tmp
-          emptyDir: {}
+          emptyDir: { }
       priorityClassName: {{ .Values.global.wardenPriorityClassName }}

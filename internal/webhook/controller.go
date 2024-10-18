@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"context"
+	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/kyma-project/warden/internal/webhook/certs"
 	"github.com/pkg/errors"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,21 +68,18 @@ func SetupResourcesController(ctx context.Context, mgr ctrl.Manager, serviceName
 		return errors.Wrap(err, "failed to create webhook-config-controller")
 	}
 
-	if err := c.Watch(&source.Kind{
-		Type: &admissionregistrationv1.ValidatingWebhookConfiguration{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &admissionregistrationv1.ValidatingWebhookConfiguration{}),
 		&handler.EnqueueRequestForObject{},
 	); err != nil {
 		return errors.Wrap(err, "failed to watch ValidatingWebhookConfiguration")
 	}
 
-	if err := c.Watch(&source.Kind{
-		Type: &admissionregistrationv1.MutatingWebhookConfiguration{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &admissionregistrationv1.MutatingWebhookConfiguration{}),
 		&handler.EnqueueRequestForObject{},
 	); err != nil {
 		return errors.Wrap(err, "failed to watch MutatingWebhookConfiguration")
 	}
-	if err := c.Watch(&source.Kind{
-		Type: &corev1.Secret{}},
+	if err := c.Watch(source.Kind(mgr.GetCache(), &corev1.Secret{}),
 		&handler.EnqueueRequestForObject{},
 	); err != nil {
 		return errors.Wrap(err, "failed to watch Secrets")

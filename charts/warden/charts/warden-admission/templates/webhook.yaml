@@ -5,6 +5,13 @@ metadata:
   name: validation.webhook.warden.kyma-project.io
   labels:
     app: {{ .Values.global.name }}
+    kyma-project.io/module: {{ .Values.global.name }}
+    app.kubernetes.io/name: {{ .Values.global.name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}-validating-webhook
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    app.kubernetes.io/component: {{ .Chart.Name }}
+    app.kubernetes.io/part-of: {{ .Values.global.name }}
+    app.kubernetes.io/managed-by: Helm
 webhooks:
   - clientConfig:
       service:
@@ -13,9 +20,12 @@ webhooks:
     failurePolicy: Ignore
     sideEffects: None
     matchPolicy: Exact
-    timeoutSeconds: 15
+    timeoutSeconds: 1
     admissionReviewVersions: [ "v1beta1", "v1" ]
     name: validation.webhook.warden.kyma-project.io
+    namespaceSelector:
+      matchLabels:
+        namespaces.warden.kyma-project.io/validate: enabled
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
@@ -23,6 +33,13 @@ metadata:
   name: defaulting.webhook.warden.kyma-project.io
   labels:
     app: {{ .Values.global.name }}
+    kyma-project.io/module: {{ .Values.global.name }}
+    app.kubernetes.io/name: {{ .Values.global.name }}
+    app.kubernetes.io/instance: {{ .Chart.Name }}-mutating-webhook
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    app.kubernetes.io/component: {{ .Chart.Name }}
+    app.kubernetes.io/part-of: {{ .Values.global.name }}
+    app.kubernetes.io/managed-by: Helm
 webhooks:
   - clientConfig:
       service:
@@ -31,6 +48,10 @@ webhooks:
     failurePolicy: Ignore
     sideEffects: None
     matchPolicy: Exact
-    timeoutSeconds: 15
+    timeoutSeconds: 10
     admissionReviewVersions: [ "v1beta1", "v1" ]
     name: defaulting.webhook.warden.kyma-project.io
+    namespaceSelector:
+      matchLabels:
+        namespaces.warden.kyma-project.io/validate: enabled
+
